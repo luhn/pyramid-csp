@@ -1,7 +1,7 @@
 import base64
 import secrets
 
-from pyramid.event import NewResponse
+from pyramid.events import NewResponse
 from pyramid.request import RequestLocalCache
 from zope.interface import Interface, implementer
 
@@ -10,25 +10,27 @@ def includeme(config):
     csp = ContentSecurityPolicy()
     config.registry.registerUtility(csp, IContentSecurityPolicy)
     config.add_subscriber(inject_csp, NewResponse)
-    config.add_directive(add_csp_source, "add_csp_source")
+    config.add_directive("add_csp_source", add_csp_source)
     config.add_request_method(add_csp_request_source, "add_csp_source")
 
     # Parse ``csp`` setting
     settings = config.get_settings()
     csp = settings.get("csp")
-    for directive in csp.split(";"):
-        name, *sources = directive.split()
-        for source in sources:
-            config.add_csp_source(name, source)
+    if csp:
+        for directive in csp.split(";"):
+            name, *sources = directive.split()
+            for source in sources:
+                config.add_csp_source(name, source)
 
     # CSP Nonce: https://content-security-policy.com/nonce/
     config.add_request_method(make_csp_nonce, "csp_nonce", reify=True)
-    config.registry["csp.nonce_directives"] = settings.get(
-        "csp.nonce_directives", "default-src"
-    ).split()
+    directives_setting = settings.get("csp.nonce_directives", "default-src")
+    config.registry["csp.nonce_directives"] = [
+        x.strip() for x in directives_setting.split(",")
+    ]
 
 
-class Sources:
+class CSPSources:
     WILDCARD = "*"
     NONE = "'none'"
     SELF = "'self'"
@@ -45,13 +47,13 @@ class Sources:
 
     @staticmethod
     def nonce(nonce):
-        return f"'none-{nonce}'"
+        return f"'nonce-{nonce}'"
 
     @staticmethod
     def hash(alg, h):
         if isinstance(h, bytes):
-            h = base64.b64encode(h)
-        return "'{alg}-{h}'"
+            h = base64.b64encode(h).decode("ascii")
+        return f"'{alg}-{h}'"
 
     @classmethod
     def sha256(cls, h):
@@ -116,7 +118,7 @@ class ContentSecurityPolicy:
         dictionary of lists.
 
         """
-        request_directives = self.request_directives.get(request)
+        request_directives = self.request_directives.get(request, {})
         base_directives = self.directives
         directives = {}
         for key in request_directives.keys() | base_directives.keys():
@@ -133,7 +135,7 @@ class ContentSecurityPolicy:
                 *request_directives.get(key, []),
             ]
         if "default-src" not in directives:
-            directives["default-src"] = [Sources.NONE]
+            directives["default-src"] = [CSPSources.NONE]
         return directives
 
     def make_csp(self, request):
@@ -144,7 +146,7 @@ class ContentSecurityPolicy:
         directives = self.get_directives(request)
         return "; ".join(
             " ".join([name, *sources])
-            for (name, sources) in directives.items()
+            for (name, sources) in sorted(directives.items())
         )
 
 
@@ -171,5 +173,5 @@ def inject_csp(event):
 def make_csp_nonce(request):
     nonce = secrets.token_urlsafe()
     for name in request.registry["csp.nonce_directives"]:
-        request.add_csp_source(name, Sources.nonce(nonce))
+        request.add_csp_source(name, CSPSources.nonce(nonce))
     return nonce
