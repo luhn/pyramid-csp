@@ -176,7 +176,7 @@ def test_nonce_directives(monkeypatch):
         with prepare(registry=config.registry) as env:
             request = env["request"]
             assert request.csp_nonce == "foobar"
-            csp.get_directives(request) == {
+            assert csp.get_directives(request) == {
                 "default-src": [CSPSources.nonce("foobar")],
                 "script-src": [CSPSources.nonce("foobar")],
             }
@@ -187,13 +187,15 @@ def test_nonce_directives(monkeypatch):
 
 def test_csp_setting():
     settings = {
-        "csp": "default-src 'unsafe-inline' data:; script-src 'unsafe-eval'",
+        "csp.policy": (
+            "default-src 'unsafe-inline' data:; script-src 'unsafe-eval'"
+        ),
     }
     with _testConfig(settings=settings) as config:
         config.include("pyramid_csp")
         csp = config.registry.getUtility(IContentSecurityPolicy)
         request = DummyRequest()
-        csp.get_directives(request) == {
+        assert csp.get_directives(request) == {
             "default-src": [CSPSources.UNSAFE_INLINE, CSPSources.DATA],
             "script-src": [CSPSources.UNSAFE_EVAL],
         }
@@ -218,7 +220,7 @@ def test_integration():
 """
         return Response(body=body, content_type="text/html")
 
-    settings = {"csp": "default-src https://example.com"}
+    settings = {"csp.policy": "default-src https://example.com"}
     with Configurator(settings=settings) as config:
         config.include("pyramid_csp")
         config.add_route("index", "/")

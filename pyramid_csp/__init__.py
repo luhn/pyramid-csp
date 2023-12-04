@@ -15,7 +15,7 @@ def includeme(config):
 
     # Parse ``csp`` setting
     settings = config.get_settings()
-    csp = settings.get("csp")
+    csp = settings.get("csp.policy")
     if csp:
         for directive in csp.split(";"):
             name, *sources = directive.split()
@@ -39,7 +39,7 @@ class CSPSources:
     UNSAFE_INLINE = "'unsafe-inline'"
     UNSAFE_EVAL = "'unsafe-eval'"
     STRICT_DYNAMIC = "'strict-dynamic'"
-    UNSAFE_HASHED = "'unsafe-hashes'"
+    UNSAFE_HASHES = "'unsafe-hashes'"
 
     @staticmethod
     def https(domain):
