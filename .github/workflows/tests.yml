@@ -1,0 +1,49 @@
+name: Tests
+
+on:
+  - push
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        py:
+          - "3.8"
+          - "3.9"
+          - "3.10"
+          - "3.11"
+          - "3.12"
+          - "pypy3.8"
+          - "pypy3.9"
+          - "pypy3.10"
+
+    name: "Python: ${{ matrix.py }}"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.py }}
+      - name: Install
+        run: pip install .[testing]
+      - name: Running tests
+        run: pytest test.py
+
+  lint:
+    runs-on: ubuntu-latest
+    name: Lint
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.12
+      - name: Install
+        run: pip install .[linting]
+      - name: Ruff
+        run: ruff pyramid_csp test.py
+      - name: Black
+        run: black --check pyramid_csp test.py
+      - name: isort
+        run: isort --check pyramid_csp test.py
